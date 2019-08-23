@@ -1,0 +1,3 @@
+- Implementar uma forma de tornar o servidor público para toda a Internet ou
+somente para a rede LAN (dando assim alguma utilidade para a variável config.
+PublicServer);

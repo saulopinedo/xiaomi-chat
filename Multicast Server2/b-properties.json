@@ -1,0 +1,10 @@
+{
+  "PublicServer": false,
+  "ThisServerName": "Goiás",
+  "PortServers": "9001",
+  "PortClients": "9051",
+  "MasterIP": "127.0.0.1",
+  "MasterPort": "8050",
+  "idchanBegin": 200,
+  "idchanEnd": 299
+}

@@ -1,0 +1,5 @@
+{
+  "PublicServer": false,
+  "PortServers": "8050",
+  "PortClients": "8000"
+}

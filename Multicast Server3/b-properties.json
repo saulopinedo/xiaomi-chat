@@ -1,0 +1,10 @@
+{
+  "PublicServer": false,
+  "ThisServerName": "Pará",
+  "PortServers": "9002",
+  "PortClients": "9052",
+  "MasterIP": "127.0.0.1",
+  "MasterPort": "8050",
+  "idchanBegin": 300,
+  "idchanEnd": 399
+}

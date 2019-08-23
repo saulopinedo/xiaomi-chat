@@ -1,0 +1,10 @@
+{
+  "PublicServer": false,
+  "ThisServerName": "Paraná",
+  "PortServers": "9000",
+  "PortClients": "9050",
+  "MasterIP": "127.0.0.1",
+  "MasterPort": "8050",
+  "idchanBegin": 100,
+  "idchanEnd": 199
+}
