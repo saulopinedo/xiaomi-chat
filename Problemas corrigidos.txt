@@ -1,0 +1,5 @@
+- Corrigido o problema no qual um servidor broadcast, após a requisição do usuário em criar um novo canal, não informava aos outros servidores o nome e a senha do canal criado;
+
+** Corrigir:
+- Aviso de status online da pessoa sendo printado duas vezes.
+- Servidores broadcast desligando-se após vários comandos.

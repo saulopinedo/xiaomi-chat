@@ -174,11 +174,17 @@ func main() {
 				if str, ok := chanAddresses[msg.RoomID]; ok {
 					str = append(str, msg.Message2)
 					chanAddresses[msg.RoomID] = str
-					nameChannels[msg.RoomID] = msg.Message1
+					str2 := strings.Split(msg.Message1, ":")
+					nameChannels[msg.RoomID] = str2[0]
+					passChannels[msg.RoomID] = str2[1]
+					fmt.Println(msg) //
 				} else {
 					str = append(str, msg.Message2)
 					chanAddresses[msg.RoomID] = str
-					nameChannels[msg.RoomID] = msg.Message1
+					str2 := strings.Split(msg.Message1, ":")
+					nameChannels[msg.RoomID] = str2[0]
+					passChannels[msg.RoomID] = str2[1]
+					fmt.Println(msg) //
 				}
 			}
 			// Se for uma mensagem global de sistema:
@@ -425,7 +431,7 @@ func main() {
 					}
 					// Informando aos outros servidores sobre a existencia da sala criada:
 					for name := range serverAddresses {
-						go func(name, addr string) {
+						go func(name, addr, c_name, c_pass string) {
 							conn, err := net.Dial("tcp", addr)
 							if err != nil {
 								fmt.Printf("The server %s is unavailable. ", name)
@@ -434,9 +440,9 @@ func main() {
 							}
 							// ID 1 significa um tipo de mensagem.
 							enc := gob.NewEncoder(conn)
-							enc.Encode(Chat{1, nil, channelCount, name, ip + ":" + config.PortServers})
+							enc.Encode(Chat{1, nil, channelCount, c_name + ":" + c_pass, ip + ":" + config.PortServers})
 							conn.Close()
-						}(name, serverAddresses[name])
+						}(name, serverAddresses[name], nameChannels[channelCount], passChannels[channelCount])
 					}
 					channelCount++
 				case "nick":
