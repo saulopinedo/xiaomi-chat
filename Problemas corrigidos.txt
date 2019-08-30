@@ -1,5 +1,11 @@
-- Corrigido o problema no qual um servidor broadcast, após a requisição do usuário em criar um novo canal, não informava aos outros servidores o nome e a senha do canal criado;
+** Commited **
+
+- Corrigido o problema no qual um servidor broadcast, após a requisição do usuário em criar um novo canal, não informava aos outros servidores o nome e a senha do canal criado.
+
+** To commit **
+
+- Corrigido o problema no qual os servidores broadcast não liam os intervalos de canais em seus arquivos JSON. Foi preciso abandonar o pacote "tkanos/gonfig" e usar o pacote nativo "encoding/json".
 
 ** Corrigir:
+
 - Aviso de status online da pessoa sendo printado duas vezes.
-- Servidores broadcast desligando-se após vários comandos.

@@ -2,15 +2,15 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/tkanos/gonfig"
 )
 
 func get(reader io.Reader) (message string, err error) {
@@ -90,11 +90,15 @@ func main() {
 	var sname, saddr, cname string
 
 	// 2. Lendo configuracoes;
-	config := Properties{}
-	err := gonfig.GetConf("c-properties.json", &config)
+	jsonFile, err := os.Open(`c-properties.json`)
 	if err != nil {
 		panic(err)
 	}
+	defer jsonFile.Close()
+
+	byteValueJSON, _ := ioutil.ReadAll(jsonFile)
+	config := Properties{}
+	json.Unmarshal(byteValueJSON, &config)
 
 	// 3. Preparando o cabecalho:
 	cmd := exec.Command("cmd", "/c", "cls")

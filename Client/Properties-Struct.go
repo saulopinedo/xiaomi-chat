@@ -2,7 +2,6 @@ package main
 
 // Properties structure.
 type Properties struct {
-	MasterIP         string
-	MasterPort       string
-	ConnectionString string
+	MasterIP   string `json:"MasterIP"`
+	MasterPort string `json:"MasterPort"`
 }

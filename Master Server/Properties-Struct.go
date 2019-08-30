@@ -2,10 +2,9 @@ package main
 
 // Properties structure.
 type Properties struct {
-	PublicServer     bool
-	PortServers      string
-	PortClients      string
-	ConnectionString string
+	PublicServer bool   `json:"PublicServer"`
+	PortServers  string `json:"PortServers"`
+	PortClients  string `json:"PortClients"`
 }
 
 // Data structure

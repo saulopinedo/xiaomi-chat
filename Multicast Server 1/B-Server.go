@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -13,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/tkanos/gonfig"
 )
 
 func get(reader io.Reader) (message string, err error) {
@@ -102,14 +102,18 @@ func main() {
 	commandQueue := make(chan Command)
 
 	// 2. Lendo configuracoes;
-	config := Properties{}
-	err := gonfig.GetConf("b-properties.json", &config)
+	jsonFile, err := os.Open(`b-properties.json`)
 	if err != nil {
 		panic(err)
 	}
-	channelCount := config.idchanBegin
-	nameChannels[channelCount] = "Global"
-	channelCount++
+	defer jsonFile.Close()
+
+	byteValueJSON, _ := ioutil.ReadAll(jsonFile)
+	config := Properties{}
+	json.Unmarshal(byteValueJSON, &config)
+
+	channelCount := config.IDchanBegin
+	nameChannels[0] = "Global"
 
 	// 3. Preparando o cabecalho;
 	cmd := exec.Command("cmd", "/c", "cls")

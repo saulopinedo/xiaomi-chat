@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -12,8 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/tkanos/gonfig"
 )
 
 func head() {
@@ -50,11 +50,15 @@ func main() {
 	deadConnection := make(chan net.Conn)
 
 	// 2. Lendo configuracoes:
-	config := Properties{}
-	err := gonfig.GetConf("m-properties.json", &config)
+	jsonFile, err := os.Open(`m-properties.json`)
 	if err != nil {
 		panic(err)
 	}
+	defer jsonFile.Close()
+
+	byteValueJSON, _ := ioutil.ReadAll(jsonFile)
+	config := Properties{}
+	json.Unmarshal(byteValueJSON, &config)
 
 	// 3. Preparando o cabecalho:
 	cmd := exec.Command("cmd", "/c", "cls")
