@@ -9,12 +9,62 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
+
+var servercounter uint8
+
+// Associacoes entre servidores e atributos:
+var serverName = make(map[net.Conn]string)
+var serverAddrS = make(map[net.Conn]string)
+var serverAddrC = make(map[net.Conn]string)
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+func handler(writer http.ResponseWriter, request *http.Request) {
+	socket, _ := upgrader.Upgrade(writer, request, nil) // Tratar erro!
+
+	// Ler o nome do cliente:
+	msgType, msg, _ := socket.ReadMessage() // Tratar erro!
+	fmt.Printf("A client has arrived: %s | ", string(msg))
+	fmt.Println(socket.RemoteAddr())
+	fmt.Println("Trying to redirect him to an available multicast server...")
+
+	if servercounter == 0 {
+		socket.WriteMessage(msgType, []byte("All servers are under maintenance. Please try again later.")) // Tratar erro!
+		fmt.Println("Every multicast server is offline. The client was disconnected.\n")
+		socket.Close()
+		return
+	}
+
+	n := int64(servercounter)
+	nBig, _ := rand.Int(rand.Reader, big.NewInt(n))
+	n = nBig.Int64()
+	slot := int(n)
+
+	i := 0
+	for c := range serverAddrC {
+		if i == slot {
+			// Conectar o cliente via navegador com outro servidor:
+			socket.WriteMessage(1, []byte("//"+serverAddrC[c]))
+			fmt.Printf("DONE. '%s' went to %s!\n\n", string(msg), serverName[c])
+			break
+		} else {
+			i++
+		}
+	}
+}
 
 func head() {
 	fmt.Println(" _____________________________")
@@ -36,14 +86,9 @@ func get(conn net.Conn) (message string, err error) {
 func main() {
 
 	// 1. Pre-definindo as variaveis fundamentais:
-	servercounter := uint8(0)
+	servercounter = 0
 	mutex := &sync.Mutex{}
 	var enc *gob.Encoder
-
-	// 1.1. Associacoes entre servidores e atributos:
-	serverName := make(map[net.Conn]string)
-	serverAddrS := make(map[net.Conn]string)
-	serverAddrC := make(map[net.Conn]string)
 
 	// 1.2 Canais de controle:
 	newConnection := make(chan net.Conn)
@@ -60,74 +105,91 @@ func main() {
 	config := Properties{}
 	json.Unmarshal(byteValueJSON, &config)
 
-	// 3. Preparando o cabecalho:
+	// 3. Preparando servidor de arquivos:
+	// http.Handle("/", http.FileServer(http.Dir("./dist")))
+	// go func() {
+	// 	log.Fatal(http.ListenAndServe(":8100", nil))
+	// }()
+
+	// 4. Preparando o cabecalho:
 	cmd := exec.Command("cmd", "/c", "cls")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 	head()
 
-	// 4. Preparando a conexao dos servidores e dos clientes:
+	// 5. Preparando a conexao dos servidores e dos clientes:
 	serverListener, err := net.Listen("tcp", ":"+config.PortServers)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	clientListener, err := net.Listen("tcp", "127.0.0.1:"+config.PortClients)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+
+	http.HandleFunc("/echo", handler)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "websockets.html")
+	})
+
+	go func() {
+		http.ListenAndServe("127.0.0.1:"+config.PortClients, nil) // Tratar erro!
+	}()
+
+	// clientListener, err := net.Listen("tcp", "192.168.31.100:"+config.PortClients)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	os.Exit(1)
+	// }
 	fmt.Println("Master Server is ready!")
 	fmt.Println()
 
-	// 5. Redirecionando clientes repetidamente:
-	go func(cl net.Listener) {
-		for {
-			conn, err := cl.Accept()
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			clientname, _ := get(conn)
-			fmt.Printf("A client has arrived: %s | ", clientname)
-			fmt.Println(conn.RemoteAddr())
-			fmt.Println("Trying to redirect him to an available multicast server...")
+	// 6. Redirecionando clientes repetidamente:
+	// go func(cl net.Listener) {
+	// 	for {
+	// 		conn, err := cl.Accept()
+	// 		if err != nil {
+	// 			fmt.Println(err)
+	// 			continue
+	// 		}
+	// 		clientname, _ := get(conn)
+	// 		fmt.Printf("A client has arrived: %s | ", clientname)
+	// 		fmt.Println(conn.RemoteAddr())
+	// 		fmt.Println("Trying to redirect him to an available multicast server...")
 
-			go func(conn net.Conn, cname string) {
-				for {
-					if servercounter == 0 {
-						_, err := fmt.Fprintf(conn, "0\n")
-						if err != nil {
-							fmt.Printf("The client '%s' has disconnected.\n\n", cname)
-							return
-						}
-						time.Sleep(5000 * time.Millisecond)
-						continue
-					}
+	// 		go func(conn net.Conn, cname string) {
+	// 			for {
+	// 				if servercounter == 0 {
+	// 					_, err := fmt.Fprintf(conn, "0\n")
+	// 					if err != nil {
+	// 						fmt.Printf("The client '%s' has disconnected.\n\n", cname)
+	// 						return
+	// 					}
+	// 					time.Sleep(5000 * time.Millisecond)
+	// 					continue
+	// 				}
 
-					n := int64(servercounter)
-					nBig, _ := rand.Int(rand.Reader, big.NewInt(n))
-					n = nBig.Int64()
-					slot := int(n)
+	// 				n := int64(servercounter)
+	// 				nBig, _ := rand.Int(rand.Reader, big.NewInt(n))
+	// 				n = nBig.Int64()
+	// 				slot := int(n)
 
-					i := 0
-					for c := range serverAddrC {
-						if i == slot {
-							fmt.Fprintf(conn, "%s:%s\n", serverName[c], serverAddrC[c])
-							fmt.Printf("DONE. '%s' went to %s!\n\n", cname, serverName[c])
-							conn.Close()
-							break
-						} else {
-							i++
-						}
-					}
-					break
-				}
-			}(conn, clientname)
-		}
-	}(clientListener)
+	// 				i := 0
+	// 				for c := range serverAddrC {
+	// 					if i == slot {
+	// 						fmt.Fprintf(conn, "%s:%s\n", serverName[c], serverAddrC[c])
+	// 						fmt.Printf("DONE. '%s' went to %s!\n\n", cname, serverName[c])
+	// 						conn.Close()
+	// 						break
+	// 					} else {
+	// 						i++
+	// 					}
+	// 				}
+	// 				break
+	// 			}
+	// 		}(conn, clientname)
+	// 	}
+	// }(clientListener)
 
-	// 6. Recebendo servidores:
+	// 7. Recebendo servidores:
 	go func(sl net.Listener) {
 		for {
 			conn, err := serverListener.Accept()
@@ -140,7 +202,7 @@ func main() {
 		}
 	}(serverListener)
 
-	// 7. Conectando e enviando a lista estruturada de servidores para eles proprios:
+	// 8. Conectando e enviando a lista estruturada de servidores para eles proprios:
 	go func() {
 		for {
 			select {

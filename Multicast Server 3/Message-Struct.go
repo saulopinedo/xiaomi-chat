@@ -1,6 +1,10 @@
 package main
 
-import "net"
+import (
+	"net"
+
+	"github.com/gorilla/websocket"
+)
 
 // Chat structure.
 type Chat struct {
@@ -14,7 +18,7 @@ type Chat struct {
 // Command structure.
 type Command struct {
 	ID         uint32
-	FromUser   net.Conn
+	FromUser   *websocket.Conn
 	Command    string
 	Parameters []string
 }

@@ -1,10 +1,9 @@
 ** Commited **
 
 - Corrigido o problema no qual um servidor broadcast, após a requisição do usuário em criar um novo canal, não informava aos outros servidores o nome e a senha do canal criado.
+- Corrigido o problema no qual os servidores broadcast não liam os intervalos de canais em seus arquivos JSON. Foi preciso abandonar o pacote "tkanos/gonfig" e usar o pacote nativo "encoding/json".
 
 ** To commit **
-
-- Corrigido o problema no qual os servidores broadcast não liam os intervalos de canais em seus arquivos JSON. Foi preciso abandonar o pacote "tkanos/gonfig" e usar o pacote nativo "encoding/json".
 
 ** Corrigir:
 

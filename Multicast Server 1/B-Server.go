@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -15,7 +16,39 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/getsentry/raven-go"
+	"github.com/streadway/amqp"
 )
+
+func PanicOnError(err error) {
+	if err != nil {
+		raven.CaptureErrorAndWait(err, nil)
+		log.Panic(err)
+	}
+}
+
+func PrintOnError(err error) {
+	if err != nil {
+		raven.CaptureError(err, nil)
+		log.Println(err)
+	}
+}
+
+func serialize(message Chat) ([]byte, error) {
+	var b bytes.Buffer
+	encoder := gob.NewEncoder(&b)
+	err := encoder.Encode(message)
+	return b.Bytes(), err
+}
+
+func deserialize(b []byte) (Chat, error) {
+	var msg Chat
+	buf := bytes.NewBuffer(b)
+	decoder := gob.NewDecoder(buf)
+	err := decoder.Decode(&msg)
+	return msg, err
+}
 
 func get(reader io.Reader) (message string, err error) {
 	message, err = bufio.NewReader(reader).ReadString('\n')
@@ -73,6 +106,16 @@ func head() {
 
 func main() {
 
+	// 0. Inicializando servicos adicionais;
+	raven.SetDSN("https://277886f557384520a086cfedea9930cf@sentry.io/1831452")
+
+	// 0.1. blabla2
+	raven.SetDefaultLoggerName("saulopinedo")
+	raven.SetDebug(true)
+	raven.SetEnvironment("staging")
+	raven.SetRelease("Xiaomi")
+	raven.SetSampleRate(1.0)
+
 	// 1. Pre-definindo as variaveis fundamentais;
 	clientCount := 0
 	var serverConn net.Conn
@@ -103,9 +146,7 @@ func main() {
 
 	// 2. Lendo configuracoes;
 	jsonFile, err := os.Open(`b-properties.json`)
-	if err != nil {
-		panic(err)
-	}
+	PanicOnError(err)
 	defer jsonFile.Close()
 
 	byteValueJSON, _ := ioutil.ReadAll(jsonFile)
@@ -120,6 +161,46 @@ func main() {
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 	head()
+
+	// 4.1. Estabelendo conexao com o servico RabbitMQ;
+	rabbit, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	PanicOnError(err)
+	defer rabbit.Close()
+
+	// 4.2. Dedicando canal de servico RabbitMQ;
+	ch, err := rabbit.Channel()
+	PanicOnError(err)
+	defer ch.Close()
+
+	// 4.3. Dedicando exchange;
+	err = ch.ExchangeDeclare("syslog", "fanout", true, false, false, false, nil)
+	PanicOnError(err)
+
+	err = ch.ExchangeDeclare("msglog", "fanout", true, false, false, false, nil)
+	PanicOnError(err)
+
+	err = ch.ExchangeDeclare("setlog", "fanout", true, false, false, false, nil)
+	PanicOnError(err)
+
+	// 4.4. Dedicando filas de mensagens;
+	sysqueue, err := ch.QueueDeclare("", false, false, true, false, nil)
+	PanicOnError(err)
+
+	msgqueue, err := ch.QueueDeclare("", false, false, true, false, nil)
+	PanicOnError(err)
+
+	setqueue, err := ch.QueueDeclare("", false, false, true, false, nil)
+	PanicOnError(err)
+
+	// 4.5. Criando vinculacoes;
+	err = ch.QueueBind(sysqueue.Name, "", "syslog", false, nil)
+	PanicOnError(err)
+
+	err = ch.QueueBind(msgqueue.Name, "", "msglog", false, nil)
+	PanicOnError(err)
+
+	err = ch.QueueBind(setqueue.Name, "", "setlog", false, nil)
+	PanicOnError(err)
 
 	// 5. Conectando e recebendo lista estruturada de servidores do Master Server;
 	go func() {
@@ -151,75 +232,70 @@ func main() {
 		}
 	}()
 
-	// 6. Abrindo conexao para que outros servidores mandem mensagens;
-	serverListener, err := net.Listen("tcp", ":"+config.PortServers)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
 	// 7. Recebendo mensagens estruturadas de servidores;
-	go func(sl net.Listener) {
-		for {
-			var msg Chat
-			conn, err := sl.Accept()
-			if err != nil {
-				fmt.Println("Houve uma tentativa mal sucedida de receber um dado externo.")
-				continue
-			}
-			dec := gob.NewDecoder(conn)
-			dec.Decode(&msg)
-			// Se for uma mensagem de cliente, proceder:
-			if msg.ID == 0 {
-				Message <- msg
-			}
-			// Se forem atributos de canal, proceder:
-			if msg.ID == 1 {
-				if str, ok := chanAddresses[msg.RoomID]; ok {
-					str = append(str, msg.Message2)
-					chanAddresses[msg.RoomID] = str
-					str2 := strings.Split(msg.Message1, ":")
-					nameChannels[msg.RoomID] = str2[0]
-					passChannels[msg.RoomID] = str2[1]
-					fmt.Println(msg) //
-				} else {
-					str = append(str, msg.Message2)
-					chanAddresses[msg.RoomID] = str
-					str2 := strings.Split(msg.Message1, ":")
-					nameChannels[msg.RoomID] = str2[0]
-					passChannels[msg.RoomID] = str2[1]
-					fmt.Println(msg) //
-				}
-			}
-			// Se for uma mensagem global de sistema:
-			if msg.ID == 2 {
-				for c := range nameClients {
-					if msg.Message2 != nameClients[c] {
-						_, err := fmt.Fprintf(c, "system:"+msg.Message1+"\n")
-						if err != nil {
-							deadConnection <- c
-						}
+	msgClient, err := ch.Consume(msgqueue.Name, "", true, false, false, false, nil)
+	PanicOnError(err)
+	msgSystem, err := ch.Consume(sysqueue.Name, "", true, false, false, false, nil)
+	PanicOnError(err)
+	msgConfig, err := ch.Consume(setqueue.Name, "", true, false, false, false, nil)
+	PanicOnError(err)
+
+	// Se for uma mensagem de cliente, proceder:
+	go func() {
+		for d := range msgClient {
+			msg, _ := deserialize(d.Body)
+			Message <- msg
+		}
+	}()
+
+	// Se for uma mensagem global de sistema:
+	go func() {
+		for d := range msgSystem {
+			msg, _ := deserialize(d.Body)
+			for c := range nameClients {
+				if msg.Message2 != nameClients[c] {
+					_, err := fmt.Fprintf(c, "system:"+msg.Message1+"\n")
+					if err != nil {
+						deadConnection <- c
 					}
 				}
 			}
-			conn.Close()
 		}
+	}()
 
-	}(serverListener)
+	// Se forem atributos de canal, proceder:
+	go func() {
+		for d := range msgConfig {
+			msg, _ := deserialize(d.Body)
+			if str, ok := chanAddresses[msg.RoomID]; ok {
+				str = append(str, msg.Message2)
+				chanAddresses[msg.RoomID] = str
+				str2 := strings.Split(msg.Message1, ":")
+				nameChannels[msg.RoomID] = str2[0]
+				passChannels[msg.RoomID] = str2[1]
+				fmt.Println(msg) //
+			} else {
+				str = append(str, msg.Message2)
+				chanAddresses[msg.RoomID] = str
+				str2 := strings.Split(msg.Message1, ":")
+				nameChannels[msg.RoomID] = str2[0]
+				passChannels[msg.RoomID] = str2[1]
+				fmt.Println(msg) //
+			}
+		}
+	}()
 
 	// 8. Preparando para receber conexoes de novos clientes;
 	clientListener, err := net.Listen("tcp", ":"+config.PortClients)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	PanicOnError(err)
 
 	// 9. Recebendo novos clientes;
 	go func(cl net.Listener) {
 		for {
 			conn, err := cl.Accept()
 			if err != nil {
-				fmt.Println(err)
+				raven.CaptureError(err, nil)
+				log.Println(err)
 				continue
 			}
 			clientName, _ := get(conn)
@@ -292,14 +368,13 @@ func main() {
 			select {
 			// 10.3. Se o sistema enviar uma mensagem global, proceder:
 			case message := <-sysMessageGlobal:
-				for i := range serverAddresses {
-					go func(message Chat, addr string) {
-						conn, _ := net.Dial("tcp", addr)
-						enc := gob.NewEncoder(conn)
-						enc.Encode(message)
-						conn.Close()
-					}(message, serverAddresses[i])
-				}
+				msg, err := serialize(message) // Implementar tratamento de erro!
+				err = ch.Publish("syslog", "", false, false, amqp.Publishing{
+					ContentType: "text/plain",
+					Body:        msg,
+				})
+				PrintOnError(err)
+
 				for c := range nameClients {
 					if message.Message2 != nameClients[c] {
 						_, err := fmt.Fprintf(c, "system:"+
@@ -434,20 +509,12 @@ func main() {
 						deadConnection <- cmd.FromUser
 					}
 					// Informando aos outros servidores sobre a existencia da sala criada:
-					for name := range serverAddresses {
-						go func(name, addr, c_name, c_pass string) {
-							conn, err := net.Dial("tcp", addr)
-							if err != nil {
-								fmt.Printf("The server %s is unavailable. ", name)
-								fmt.Println("This one cannot inform that about the new channel.")
-								return
-							}
-							// ID 1 significa um tipo de mensagem.
-							enc := gob.NewEncoder(conn)
-							enc.Encode(Chat{1, nil, channelCount, c_name + ":" + c_pass, ip + ":" + config.PortServers})
-							conn.Close()
-						}(name, serverAddresses[name], nameChannels[channelCount], passChannels[channelCount])
-					}
+					msgByte, _ := serialize(Chat{1, nil, channelCount, nameChannels[channelCount] + ":" + passChannels[channelCount], ip + ":" + config.PortServers}) // Implementar tratamento de erro!
+					err = ch.Publish("setlog", "", false, false, amqp.Publishing{
+						ContentType: "text/plain",
+						Body:        msgByte,
+					})
+					PrintOnError(err)
 					channelCount++
 				case "nick":
 					// Verificando se o comando possui seus argumentos necessarios:
@@ -510,20 +577,13 @@ func main() {
 					nameChannels[msg.RoomID])
 			}
 			Message <- msg
-			for i := 0; i < len(chanAddresses[msg.RoomID]); i++ {
-				if chanAddresses[msg.RoomID][i] != ip+":"+config.PortServers {
-					go func(msg Chat, addr string) {
-						conn, err := net.Dial("tcp", addr)
-						if err != nil {
-							fmt.Printf("It was not possible to send the message to the server '%s'.\n",
-								serverAddresses[chanAddresses[msg.RoomID][i]])
-						}
-						enc := gob.NewEncoder(conn)
-						enc.Encode(msg)
-						conn.Close()
-					}(msg, chanAddresses[msg.RoomID][i])
-				}
-			}
+
+			msgByte, _ := serialize(msg) // Implementar tratamento de erro!
+			err := ch.Publish("msglog", "", false, false, amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        msgByte,
+			})
+			PrintOnError(err)
 		}
 	}
 }
