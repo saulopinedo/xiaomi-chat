@@ -1,7 +1,0 @@
-1) Implementar thread em B-Server que receba dados de outros servidores.
-
-- Fazer com que clientes locais sejam redirecionados para um outro servidor
-caso o atual venha a ser desligado.
-
-- Fazer com que o servidor guarde seus dados de controle em um arquivo caso
-este venha a ser desligado.

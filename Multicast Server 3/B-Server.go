@@ -304,7 +304,7 @@ func main() {
 			msg, _ := deserialize(d.Body)
 			for c := range nameClients {
 				if msg.Message2 != nameClients[c] {
-					err := c.WriteMessage(1, []byte(fmt.Sprint("system:"+msg.Message1+"\n")))
+					err := c.WriteMessage(1, []byte(fmt.Sprint(msg.Message1+"\n")))
 					if err != nil {
 						deadConnection <- c
 					}
@@ -391,16 +391,17 @@ func main() {
 
 			// 10.2. Se existe uma mensagem para os clientes locais, proceder:
 			case msg := <-Message:
+				fmt.Println("TESTE2")
 				for conn := range chanClients {
 					if msg.RoomID == chanClients[conn] && msg.Message2 != nameClients[conn] {
 						go func(msg Chat, conn *websocket.Conn) {
 							if msg.ID == 0 {
-								err := conn.WriteMessage(1, []byte(fmt.Sprint(msg.Message2+":"+msg.Message1+"\n")))
+								err := conn.WriteMessage(1, []byte(fmt.Sprint(msg.Message2+": "+msg.Message1+"\n")))
 								if err != nil {
 									deadConnection <- conn
 								}
 							} else if msg.ID == 2 {
-								err := conn.WriteMessage(1, []byte(fmt.Sprint("system:"+msg.Message1+"\n")))
+								err := conn.WriteMessage(1, []byte(fmt.Sprint(msg.Message1+"\n")))
 								if err != nil {
 									deadConnection <- conn
 								}
@@ -426,14 +427,14 @@ func main() {
 				})
 				PrintOnError(err)
 
-				for c := range nameClients {
-					if message.Message2 != nameClients[c] {
-						err := c.WriteMessage(1, []byte(fmt.Sprint("system:"+message.Message1+"\n")))
-						if err != nil {
-							deadConnection <- c
-						}
-					}
-				}
+				// for c := range nameClients {
+				// 	if message.Message2 != nameClients[c] {
+				// 		err := c.WriteMessage(1, []byte(fmt.Sprint(message.Message1+"\n")))
+				// 		if err != nil {
+				// 			deadConnection <- c
+				// 		}
+				// 	}
+				// }
 			// 10.4. Se existe um comando para ser processado, proceder:
 			case cmd := <-commandQueue:
 				fmt.Printf("%s sent a command.\n", nameClients[cmd.FromUser])
@@ -441,7 +442,7 @@ func main() {
 				case "show":
 					// Verificando se o comando possui mais argumentos do que o necessario:
 					if len(cmd.Parameters) > 0 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} You entered too many arguments!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} You entered too many arguments!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -449,7 +450,7 @@ func main() {
 					}
 					// Verificando se existem canais para serem exibidos:
 					if len(nameChannels) == 0 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} There is no channels available!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} There is no channels available!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -458,18 +459,18 @@ func main() {
 					// Enviando os canais disponiveis para o cliente:
 					var b bytes.Buffer
 					for i := range nameChannels {
-						b.WriteString(nameChannels[i] + ":")
+						b.WriteString(nameChannels[i] + " ")
 					}
 					names := b.String()
-					names = strings.TrimRight(names, ":")
-					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("show:"+names+"\n")))
+					names = strings.TrimRight(names, " ")
+					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("Salas disponíveis: "+names+"\n")))
 					if err != nil {
 						deadConnection <- cmd.FromUser
 					}
 				case "join":
 					// Verificando se o comando possui seus argumentos necessarios:
 					if len(cmd.Parameters) == 0 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} This command requires some arguments.\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} This command requires some arguments.\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -477,7 +478,7 @@ func main() {
 					}
 					// Verificando se o comando possui mais argumentos do que o necessario:
 					if len(cmd.Parameters) > 2 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} You entered too many arguments!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} You entered too many arguments!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -485,7 +486,7 @@ func main() {
 					}
 					// Verificando se cliente ja esta conectado ao canal:
 					if cmd.Parameters[0] == nameChannels[chanClients[cmd.FromUser]] {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} You're already subscribed to this channel!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} You're already subscribed to this channel!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -505,7 +506,7 @@ func main() {
 									fmt.Sprint("{System} " + nameClients[cmd.FromUser] +
 										" joined your channel."), nameClients[cmd.FromUser]}
 								// Enviar para o remetente do comando:
-								err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} All done!\n")))
+								err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} All done!\n")))
 								if err != nil {
 									deadConnection <- cmd.FromUser
 								}
@@ -514,14 +515,14 @@ func main() {
 						}
 					}
 					// Se os casos anteriores falharam, o canal nao existe:
-					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} This channels does not exist!\n")))
+					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} This channels does not exist!\n")))
 					if err != nil {
 						deadConnection <- cmd.FromUser
 					}
 				case "create":
 					// Verificando se o comando possui seus argumentos necessarios:
 					if len(cmd.Parameters) == 0 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} This command requires some arguments.\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} This command requires some arguments.\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -529,7 +530,7 @@ func main() {
 					}
 					// Verificando se o comando possui mais argumentos do que o necessario:
 					if len(cmd.Parameters) > 2 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} You entered too many arguments!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} You entered too many arguments!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -538,7 +539,7 @@ func main() {
 					// Verificando se a sala ja existe:
 					for i := range nameChannels {
 						if cmd.Parameters[0] == nameChannels[i] {
-							err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} This channel already does exist!\n")))
+							err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} This channel already does exist!\n")))
 							if err != nil {
 								deadConnection <- cmd.FromUser
 							}
@@ -554,7 +555,7 @@ func main() {
 					}
 					chanClients[cmd.FromUser] = channelCount
 					// Notificando o cliente de que a operacao foi realizada com sucesso:
-					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} All done! Now you are on your own channel.\n")))
+					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} All done! Now you are on your own channel.\n")))
 					if err != nil {
 						deadConnection <- cmd.FromUser
 					}
@@ -569,7 +570,7 @@ func main() {
 				case "nick":
 					// Verificando se o comando possui seus argumentos necessarios:
 					if len(cmd.Parameters) == 0 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} This command requires an argument!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} This command requires an argument!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -577,7 +578,7 @@ func main() {
 					}
 					// Verificando se o comando possui mais argumentos do que o necessario:
 					if len(cmd.Parameters) > 1 {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} You entered too many arguments!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} You entered too many arguments!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -585,7 +586,7 @@ func main() {
 					}
 					// Verificando se esse nome e valido:
 					if cmd.Parameters[0] == nameClients[cmd.FromUser] {
-						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} This is your name already!\n")))
+						err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} This is your name already!\n")))
 						if err != nil {
 							deadConnection <- cmd.FromUser
 						}
@@ -596,12 +597,12 @@ func main() {
 						fmt.Sprint("{System} " + nameClients[cmd.FromUser] +
 							" now is " + cmd.Parameters[0]), cmd.Parameters[0]}
 					nameClients[cmd.FromUser] = cmd.Parameters[0]
-					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} All done!\n")))
+					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} All done!\n")))
 					if err != nil {
 						deadConnection <- cmd.FromUser
 					}
 				default:
-					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("system:{System} Sorry, but this command does not exist!\n")))
+					err := cmd.FromUser.WriteMessage(1, []byte(fmt.Sprint("{System} Sorry, but this command does not exist!\n")))
 					if err != nil {
 						deadConnection <- cmd.FromUser
 					}
@@ -627,7 +628,7 @@ func main() {
 				fmt.Printf("%s sent a message on room [%s].\n", msg.Message2,
 					nameChannels[msg.RoomID])
 			}
-			Message <- msg
+			//Message <- msg
 
 			msgByte, _ := serialize(msg) // Implementar tratamento de erro!
 			err := ch.Publish("msglog", "", false, false, amqp.Publishing{

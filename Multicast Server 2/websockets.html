@@ -5,12 +5,12 @@
 <script>
     var input = document.getElementById("input");
     var output = document.getElementById("output");
-    var socket = new WebSocket("ws://localhost:9052/echo");
+    var socket = new WebSocket("ws://localhost:9051/echo");
 
     socket.onopen = function () {
-        output.innerHTML += "-------------------\n";
-        output.innerHTML += "| Pará: Connected |\n";
-		output.innerHTML += "-------------------\n\n";
+        output.innerHTML += "--------------------\n";
+        output.innerHTML += "| Goiás: Connected |\n";
+		output.innerHTML += "--------------------\n\n";
     };
 
     socket.onmessage = function (e) {
